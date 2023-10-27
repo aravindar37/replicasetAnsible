@@ -40,5 +40,5 @@ sudo systemctl start mongod
 // check rs.status() and wait till node is successfully added and is in SECONDARY status
 rs.status()
 
-// change compatibility version is 4.2
+// change compatibility version is {next-version}
 db.adminCommand( { setFeatureCompatibilityVersion: ‘{next-version}’  } )
