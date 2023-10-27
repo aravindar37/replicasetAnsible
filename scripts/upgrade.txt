@@ -3,7 +3,7 @@ systemctl stop mongod
 
 rm /etc/yum.repos.d/mongodb-org-{current-version}.repo
 
-sudo vi /etc/yum.repos.d/mongodb-org-{next-version}.repo
+sudo vi /etc/yum.repos.d/mongodb-org-{next-version}.repo #interactive?
 [mongodb-org-{next-version}]
 name=MongoDB Repository
 baseurl=https://repo.mongodb.org/yum/redhat/$releasever/mongodb-org/{next-version}/x86_64/
