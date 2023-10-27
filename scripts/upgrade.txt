@@ -1,1 +1,44 @@
+//Perform in secondary1
+systemctl stop mongod
 
+rm /etc/yum.repos.d/mongodb-org-{current-version}.repo
+
+sudo vi /etc/yum.repos.d/mongodb-org-{next-version}.repo
+[mongodb-org-{next-version}]
+name=MongoDB Repository
+baseurl=https://repo.mongodb.org/yum/redhat/$releasever/mongodb-org/{next-version}/x86_64/
+gpgcheck=1
+enabled=1
+gpgkey=https://www.mongodb.org/static/pgp/server-{next-version}.asc
+
+sudo yum install -y mongodb-org
+sudo systemctl start mongod
+
+// check rs.status() and wait till secondary1 is successfully added and is in SECONDARY status
+rs.status()
+
+// perform the same steps for secondary2
+
+//perform in primary
+rs.stepDown()
+
+systemctl stop mongod
+
+rm /etc/yum.repos.d/mongodb-org-{current-version}.repo
+
+sudo vi /etc/yum.repos.d/mongodb-org-{next-version}.repo
+[mongodb-org-{next-version}]
+name=MongoDB Repository
+baseurl=https://repo.mongodb.org/yum/redhat/$releasever/mongodb-org/{next-version}/x86_64/
+gpgcheck=1
+enabled=1
+gpgkey=https://www.mongodb.org/static/pgp/server-{next-version}.asc
+
+sudo yum install -y mongodb-org
+sudo systemctl start mongod
+
+// check rs.status() and wait till node is successfully added and is in SECONDARY status
+rs.status()
+
+// change compatibility version is 4.2
+db.adminCommand( { setFeatureCompatibilityVersion: ‘{next-version}’  } )
