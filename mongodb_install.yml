@@ -1,0 +1,97 @@
+---
+- name: Install MongoDB on Multiple Hosts
+  hosts: all
+  become: yes  # Run tasks with elevated privileges
+
+  tasks:
+
+    - name: Add MongoDB GPG Key
+      rpm_key:
+        state: present
+        key: https://www.mongodb.org/static/pgp/server-{{ version }}.asc
+      vars:
+        version: "{{ mongodb_version }}"
+
+    - name: Add MongoDB Repository
+      yum_repository:
+        name: mongodb-org-{{ version }}
+        description: MongoDB Repository
+        baseurl: https://repo.mongodb.org/yum/redhat/9/mongodb-org/{{ version }}/x86_64/ #modify redhat ver accordingly $releasever
+        gpgcheck: yes
+        enabled: yes
+      vars:
+        version: "{{ mongodb_version }}"
+
+    - name: Change Ownership of /data directory if different data directory is used
+      command: sudo mkdir /data
+
+    - name: Change Ownership of /logs directory if different data directory is used
+      command: sudo mkdir /var/log/mongodb
+
+    - name: Change Ownership of /data directory if different data directory is used
+      command: sudo chown -R mongod:mongod /data
+
+    - name: Change Ownership of /logs directory if different data directory is used
+      command: sudo chown -R mongod:mongod /var/log/mongodb
+
+    - name: Install MongoDB Community
+      yum:
+        name: mongodb-org
+        state: present
+
+    - name: Create mongod.conf file
+      copy:
+        src: files/mongod.conf
+        dest: /etc/mongod.conf
+        owner: root
+
+    - name: Copy key file
+      copy:
+        src: files/rs0.key
+        dest: /etc/mongodb.key
+        owner: mongod
+
+    - name: Change Ownership of keyfile
+      command: sudo chown -R mongod:mongod /etc/mongodb.key
+
+    - name: Start and Enable MongoDB
+      service:
+        name: mongod
+        state: started
+        enabled: yes
+
+    - name: Install mongosh
+      yum:
+        name: mongodb-mongosh
+        state: present
+
+---
+- name: Install MongoDB on Multiple Hosts
+  hosts: host3
+  become: yes  # Run tasks with elevated privileges
+
+  tasks:
+
+    - name: Create root user
+      shell: mongosh --eval "use admin" --eval "db.createUser({ user:\"root\",pwd:\"password\",roles:[\"root\"]})" #change username and password
+      become: yes
+      ignore_errors: yes
+      when: inventory_hostname == 'host3'
+
+    - name: Initialize replicaset
+      shell: mongosh -u root -p password --eval "use admin" --eval "rs.initiate()" #change username and password
+      become: yes
+      ignore_errors: yes
+      when: inventory_hostname == 'host3'
+
+    - name: Add nodes to replicaset
+      shell: mongosh -u root -p password --eval "rs.add({host:'{{hostvars['host1']['ansible_ssh_host']}}:27017'})"  #add host1
+      become: yes
+      ignore_errors: yes
+      when: inventory_hostname == 'host3'
+
+    - name: Add nodes to replicaset
+      shell: mongosh -u root -p password --eval "rs.add({host:'{{hostvars['host2']['ansible_ssh_host']}}:27017'})"  #add host2
+      become: yes
+      ignore_errors: yes
+      when: inventory_hostname == 'host3'
