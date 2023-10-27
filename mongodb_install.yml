@@ -23,7 +23,7 @@
         version: "{{ mongodb_version }}"
 
     - name: Change Ownership of /data directory if different data directory is used
-      command: sudo mkdir /data
+      command: sudo mkdir /data #mounted on root or local file system?
 
     - name: Change Ownership of /logs directory if different data directory is used
       command: sudo mkdir /var/log/mongodb
@@ -39,11 +39,11 @@
         name: mongodb-org
         state: present
 
-    - name: Create mongod.conf file
+    - name: Create mongod.conf file #chmod ?
       copy:
         src: files/mongod.conf
         dest: /etc/mongod.conf
-        owner: root
+        owner: mongod 
 
     - name: Copy key file
       copy:
