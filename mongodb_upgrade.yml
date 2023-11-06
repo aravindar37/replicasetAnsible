@@ -1,1 +1,131 @@
+---
+- name: Upgrade MongoDB Replica Set from 4.4 to 5.0
+  hosts: all
+  become: yes
+  gather_facts: yes  # Gather facts to determine the current primary
+
+  vars_files:
+    - vars.yml
+
+  tasks:
+    - name: Check MongoDB Replica Set Status
+      command: mongosh -u {{ mongodb_login_user }} -p {{ mongodb_login_password }} --eval "use admin" --eval "rs.status()"
+      register: rs_status_output
+      ignore_errors: yes
+
+###########################################Draft version#####################################
+#################################Under testing and can change################################
+
+
+########################### TBD  ##################################
+    # - name: Determine if any node is in ROLLBACK state
+    #   set_fact:
+    #     rollback_member: "{{ hostvars[inventory_hostname] }}"
+    #   when: "'ROLLBACK' in rs_status_output.stdout"
+
+    # - name: Determine if any node is in RECOVERING state
+    #   set_fact:
+    #     recovering_member: "{{ hostvars[inventory_hostname] }}"
+    #   when: "'RECOVERING' in rs_status_output.stdout"
+
+    # - name: Abort if any node is in ROLLBACK state
+    #   fail:
+    #     msg: "replicaset contains nodes in ROLLBACK state"
+    #   when: rollback_member is not undefined
+
+    # - name: Abort if any node is in RECOVERING state
+    #   fail:
+    #     msg: "replicaset contains nodes in RECOVERING state"
+    #   when: recovering_member is not undefined
+
+####################################################################
+
+    - name: Determine Current Primary Member
+      set_fact:
+        primary_member: "{{ hostvars[inventory_hostname] }}"
+      when: "'PRIMARY' in rs_status_output.stdout"
+
+    - name: Stop MongoDB Service on Secondaries
+      service:
+        name: mongod
+        state: stopped
+      delegate_to: "{{ item }}"
+      when: "'SECONDARY' in rs_status_output.stdout and item != primary_member.ansible_host"
+      with_items: "{{ groups['all'] }}"
+
+    - name: Add MongoDB Repository
+      yum_repository:
+        name: mongodb-org-{{ version }}
+        description: MongoDB Repository
+        baseurl: https://repo.mongodb.org/yum/redhat/9/mongodb-org/{{ version }}/x86_64/ #modify redhat ver accordingly $releasever
+        gpgcheck: yes
+        enabled: yes
+      vars:
+        version: "{{ mongodb_version }}"
+        
+    - name: Upgrade MongoDB Binaries on Secondaries
+      shell: sudo yum install -y mongodb-org-{{ version }}
+      async: 3600
+      poll: 0
+      ignore_errors: yes
+      delegate_to: "{{ item }}"
+      when: "'SECONDARY' in rs_status_output.stdout and item != primary_member.ansible_host"
+      with_items: "{{ groups['all'] }}"
+
+    - name: Start MongoDB Service on Secondaries
+      service:
+        name: mongod
+        state: started
+      delegate_to: "{{ item }}"
+      when: "'SECONDARY' in rs_status_output.stdout and item != primary_member.ansible_host"
+      with_items: "{{ groups['all'] }}"
+
+    - name: Wait for MongoDB to Start on Secondaries
+      wait_for:
+        host: "{{ item }}"
+        port: 27017
+        timeout: 600
+      delegate_to: "{{ item }}"
+      when: "'SECONDARY' in rs_status_output.stdout and item != primary_member.ansible_host"
+      with_items: "{{ groups['all'] }}"
+
+    - name: Execute rs.stepDown() on Primary Member
+      command: mongosh -u {{ mongodb_login_user }} -p {{ mongodb_login_password }} --eval "use admin" --eval "rs.stepDown()"
+      when: primary_member.ansible_host == inventory_hostname
+
+    - name: Stop MongoDB Service on Primary
+      service:
+        name: mongod
+        state: stopped
+      when: primary_member.ansible_host == inventory_hostname
+
+    - name: Add MongoDB Repository
+      yum_repository:
+        name: mongodb-org-{{ version }}
+        description: MongoDB Repository
+        baseurl: https://repo.mongodb.org/yum/redhat/9/mongodb-org/{{ version }}/x86_64/ #modify redhat ver accordingly $releasever
+        gpgcheck: yes
+        enabled: yes
+      vars:
+        version: "{{ mongodb_version }}"
+
+    - name: Upgrade MongoDB Binaries on Primary
+      shell: sudo yum install -y mongodb-org-{{ version }}
+      async: 3600
+      poll: 0
+      ignore_errors: yes
+      when: primary_member.ansible_host == inventory_hostname
+
+    - name: Start MongoDB Service on Primary
+      service:
+        name: mongod
+        state: started
+      when: primary_member.ansible_host == inventory_hostname
+
+    - name: Wait for MongoDB to Start on Primary
+      wait_for:
+        host: "{{ inventory_hostname }}"
+        port: 27017
+        timeout: 600
+      when: primary_member.ansible_host == inventory_hostname
 
